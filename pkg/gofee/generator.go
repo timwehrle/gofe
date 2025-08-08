@@ -4,23 +4,58 @@ import (
 	"fmt"
 )
 
-// Generate creates a random password of the specified length using the given PasswordConfig.
-// It returns the generated password or an error if the length is invalid or password generation fails.
-func Generate(length int, config PasswordConfig) (string, error) {
-	// Check if the provided length is valid (i.e., greater than 0).
+func Generate(length int, cfg PasswordConfig) (string, string, error) {
 	if length <= 0 {
-		// Return an error if the length is not valid.
-		return "", fmt.Errorf("length must be greater than 0")
+		return "", "", fmt.Errorf("length must be greater than 0")
 	}
 
-	// Call MapToCharset to generate a password based on the length and configuration.
-	// This function generates a password by mapping random numbers to characters from the charset.
-	password, err := MapToCharset(length, config)
+	minLen := cfg.MinLength
+	if cfg.Type == "pin" && cfg.MinPINLength > 0 {
+		minLen = cfg.MinPINLength
+	}
+	if minLen > 0 && length < minLen {
+		return "", "", fmt.Errorf("length must be >= %d", minLen)
+	}
+	if cfg.MaxLength > 0 && length > cfg.MaxLength {
+		return "", "", fmt.Errorf("length must be <= %d", cfg.MaxLength)
+	}
+
+	charset := BuildCharset(cfg)
+	if len(charset) == 0 {
+		return "", "", fmt.Errorf("no characters available (check excludes or type)")
+	}
+
+	sets := selectedSets(cfg)
+	if cfg.RequireClasses && len(sets) > 1 {
+		if length < len(sets) {
+			return "", "", fmt.Errorf("length must be >= %d to include all selected character classes", len(sets))
+		}
+
+		req := make([]byte, 0, len(sets))
+		for _, s := range sets {
+			ch, err := mapToCharset(1, s)
+			if err != nil {
+				return "", "", err
+			}
+			req = append(req, ch[0])
+		}
+
+		restStr, err := mapToCharset(length-len(req), charset)
+		if err != nil {
+			return "", "", err
+		}
+		buf := append(req, []byte(restStr)...)
+
+		if err := secureShuffle(buf); err != nil {
+			return "", "", err
+		}
+		return string(buf), charset, nil
+	}
+
+	pw, err := mapToCharset(length, charset)
 	if err != nil {
-		// Return an error if MapToCharset fails, including the specific error message.
-		return "", fmt.Errorf("error mapping number to charset: %v", err)
+		return "", "", err
 	}
 
-	// Return the successfully generated password.
-	return password, nil
+	return pw, charset, nil
 }

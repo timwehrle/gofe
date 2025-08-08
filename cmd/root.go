@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -15,7 +14,7 @@ import (
 
 const (
 	// The default length of the password
-	defaultLength int = 16
+	defaultLength int = 20
 
 	MAJOR = 0
 	MINOR = 1
@@ -30,6 +29,7 @@ var options struct {
 	digits       bool
 	symbols      bool
 	passwordType string
+	quiet        bool
 }
 
 func init() {
@@ -39,6 +39,7 @@ func init() {
 	rootCmd.Flags().BoolVarP(&options.symbols, "exclude-symbols", "s", false, "exclude symbols")
 	rootCmd.Flags().IntVarP(&options.length, "length", "l", defaultLength, "length of the password")
 	rootCmd.Flags().StringVarP(&options.passwordType, "type", "t", "", "type of password to generate (pin, memorable)")
+	rootCmd.Flags().BoolVarP(&options.quiet, "quiet", "q", false, "print only the password to stdout (no extra info)")
 
 	// Colorize the usage output
 	rootCmd.SetOutput(color.Output)
@@ -63,15 +64,15 @@ gofee --type pin --length 4
 `
 
 var long = `
-Gofee is a simple password generator, which relies on the cryptographic strength of the system's random number generator.
-It generates a password of a given length, using a set of characters that can be customized by the user.
+Gofee is a simple password generator that uses crypto/rand.
+It generates a password of a given length using a configurable character set.
 `
 
 var rootCmd = &cobra.Command{
 	Use:     "gofee",
 	Version: fmt.Sprintf("%d.%d.%d", MAJOR, MINOR, PATCH),
 	Example: example,
-	Short:   "Gofee is a simple password generator, which is reliable and secure.",
+	Short:   "Gofee is a simple password generator, reliable and secure.",
 	Long:    long,
 	Run: func(cmd *cobra.Command, args []string) {
 		config := gofee.PasswordConfig{
@@ -80,22 +81,31 @@ var rootCmd = &cobra.Command{
 			IncludeDigits:  !options.digits,
 			IncludeSymbols: !options.symbols,
 			Type:           options.passwordType,
+			RequireClasses: true,
+			MinPINLength:   6,
+			MinLength:      8,
+			MaxLength:      4096,
 		}
 
-		pw, err := gofee.Generate(options.length, config)
+		pw, charsetUsed, err := gofee.Generate(options.length, config)
 		if err != nil {
-			log.Fatalf("Error generating password: %v", err)
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
 		}
 
-		entropy, err := gofee.CalculateEntropy(len(gofee.Charset), options.length)
+		size := len(charsetUsed)
+		entropy, err := gofee.CalculateEntropy(size, options.length)
 		if err != nil {
-			log.Fatalf("Error calculating entropy: %v", err)
+			fmt.Fprint(os.Stderr, "Error calculating entropy:", err)
+			os.Exit(1)
 		}
 
-		fmt.Print("Entropy: ")
-		color.Green("%.2f bits", entropy)
+		if !options.quiet {
+			fmt.Fprint(os.Stderr, "Entropy: ")
+			color.New(color.FgGreen).Fprintf(os.Stderr, "%.2f bits\n", entropy)
+		}
 
-		fmt.Printf("Password: %s", color.GreenString(pw))
+		fmt.Fprintln(os.Stdout, pw)
 	},
 }
 

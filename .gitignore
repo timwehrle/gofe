@@ -1,3 +1,4 @@
 c.out
 dist/
 *.exe
+.vscode/

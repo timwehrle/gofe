@@ -8,7 +8,6 @@ const (
 	Uppers  = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	Digits  = "0123456789"
 	Symbols = "!@#$%^&*()-_=+[]{}|;:,.<>?/~"
-	All     = Lowers + Uppers + Digits + Symbols
 )
 
 type PasswordConfig struct {
@@ -17,38 +16,65 @@ type PasswordConfig struct {
 	IncludeDigits  bool
 	IncludeSymbols bool
 	Type           string
+
+	RequireClasses bool
+	MinPINLength   int
+	MinLength      int
+	MaxLength      int
 }
 
-func BuildCharset(config PasswordConfig) string {
-
-	switch config.Type {
+func BuildCharset(cfg PasswordConfig) string {
+	switch cfg.Type {
 	case "pin":
 		return Digits
 	case "memorable":
 		return Lowers + Uppers
 	}
 
-	if config.IncludeLowers && config.IncludeUppers && config.IncludeDigits && config.IncludeSymbols {
-		return All
+	if cfg.IncludeLowers && cfg.IncludeUppers && cfg.IncludeDigits && cfg.IncludeSymbols {
+		return Lowers + Uppers + Digits + Symbols
 	}
 
-	var builder strings.Builder
-
-	if config.IncludeLowers {
-		builder.WriteString(Lowers)
+	var b strings.Builder
+	if cfg.IncludeLowers {
+		b.WriteString(Lowers)
 	}
 
-	if config.IncludeUppers {
-		builder.WriteString(Uppers)
+	if cfg.IncludeUppers {
+		b.WriteString(Uppers)
 	}
 
-	if config.IncludeDigits {
-		builder.WriteString(Digits)
+	if cfg.IncludeDigits {
+		b.WriteString(Digits)
 	}
 
-	if config.IncludeSymbols {
-		builder.WriteString(Symbols)
+	if cfg.IncludeSymbols {
+		b.WriteString(Symbols)
 	}
 
-	return builder.String()
+	return b.String()
+}
+
+func selectedSets(cfg PasswordConfig) []string {
+	switch cfg.Type {
+	case "pin":
+		return []string{Digits}
+	case "memorable":
+		return []string{Lowers, Uppers}
+	default:
+		sets := make([]string, 0, 4)
+		if cfg.IncludeLowers {
+			sets = append(sets, Lowers)
+		}
+		if cfg.IncludeUppers {
+			sets = append(sets, Uppers)
+		}
+		if cfg.IncludeDigits {
+			sets = append(sets, Digits)
+		}
+		if cfg.IncludeSymbols {
+			sets = append(sets, Symbols)
+		}
+		return sets
+	}
 }
